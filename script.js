@@ -1,5 +1,5 @@
 // Configuração da API (OpenWeatherMap)
-const API_KEY = "SUA_CHAVE_API"; // Obtenha em: https://openweathermap.org/
+const API_KEY = "29d24b2a6d00e92a0730e50db6b920e6";
 const BASE_URL = "https://api.openweathermap.org/data/2.5";
 
 // Elementos do DOM
@@ -13,31 +13,38 @@ const weatherIcon = document.getElementById("weather-icon");
 const windSpeed = document.getElementById("wind-speed");
 const humidity = document.getElementById("humidity");
 const feelsLike = document.getElementById("feels-like");
-const updateTime = document.getElementById("update-time");
+const updateTimeElement = document.getElementById("update-time");
 const forecastContainer = document.getElementById("forecast-container");
 
 // Função para buscar dados do tempo
 async function fetchWeatherData(city) {
     try {
+        console.log(`Buscando dados para: ${city}`);
+        
         // Busca dados atuais
         const currentResponse = await fetch(
             `${BASE_URL}/weather?q=${city}&units=metric&lang=pt_br&appid=${API_KEY}`
         );
+        
+        if (!currentResponse.ok) {
+            throw new Error("Cidade não encontrada");
+        }
+        
         const currentData = await currentResponse.json();
+        console.log("Dados atuais:", currentData);
         
         // Busca previsão para 5 dias
         const forecastResponse = await fetch(
             `${BASE_URL}/forecast?q=${city}&units=metric&lang=pt_br&appid=${API_KEY}`
         );
         const forecastData = await forecastResponse.json();
+        console.log("Dados de previsão:", forecastData);
         
         // Atualiza a UI
         updateCurrentWeather(currentData);
         updateForecast(forecastData);
         updateBackground(currentData.weather[0].main);
-        
-        // Atualiza hora
-        updateTime();
+        updateTimeDisplay();
         
     } catch (error) {
         console.error("Erro ao buscar dados:", error);
@@ -54,9 +61,10 @@ function updateCurrentWeather(data) {
     humidity.textContent = `${data.main.humidity}%`;
     feelsLike.textContent = `${Math.round(data.main.feels_like)}°C`;
     
-    // Atualiza ícone
+    // Atualiza ícone (usando URL direto do OpenWeatherMap)
     const iconCode = data.weather[0].icon;
-    weatherIcon.src = `assets/icons/${iconCode}.png`;
+    weatherIcon.src = `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
+    weatherIcon.alt = data.weather[0].description;
 }
 
 // Atualiza previsão
@@ -76,7 +84,7 @@ function updateForecast(data) {
         forecastCard.className = "forecast-card";
         forecastCard.innerHTML = `
             <div class="forecast-day">${day}</div>
-            <img class="forecast-icon" src="assets/icons/${iconCode}.png" alt="${item.weather[0].description}">
+            <img class="forecast-icon" src="https://openweathermap.org/img/wn/${iconCode}.png" alt="${item.weather[0].description}">
             <div class="forecast-temp">${temp}°C</div>
         `;
         
@@ -111,9 +119,9 @@ function updateBackground(weatherCondition) {
 }
 
 // Atualiza hora da última atualização
-function updateTime() {
+function updateTimeDisplay() {
     const now = new Date();
-    updateTime.textContent = now.toLocaleTimeString("pt-BR", { 
+    updateTimeElement.textContent = now.toLocaleTimeString("pt-BR", { 
         hour: '2-digit', 
         minute: '2-digit' 
     });
@@ -121,6 +129,8 @@ function updateTime() {
 
 // Busca localização do usuário
 function getUserLocation() {
+    cityName.textContent = "Detectando sua localização...";
+    
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             position => {
@@ -129,11 +139,15 @@ function getUserLocation() {
             },
             error => {
                 console.error("Erro ao obter localização:", error);
-                alert("Não foi possível obter sua localização. Por favor, digite sua cidade manualmente.");
-            }
+                // Se falhar, usa uma cidade padrão (opcional)
+                cityName.textContent = "Não foi possível obter sua localização";
+                fetchWeatherData("São Paulo"); // Fallback
+            },
+            { timeout: 1000 } 
         );
     } else {
         alert("Geolocalização não é suportada pelo seu navegador.");
+        fetchWeatherData("São Paulo"); // Fallback
     }
 }
 
@@ -144,7 +158,7 @@ async function fetchWeatherByCoords(lat, lon) {
             `${BASE_URL}/weather?lat=${lat}&lon=${lon}&units=metric&lang=pt_br&appid=${API_KEY}`
         );
         const data = await response.json();
-        cityInput.value = data.name;
+        cityInput.value = `${data.name}, ${data.sys.country}`;
         fetchWeatherData(data.name);
     } catch (error) {
         console.error("Erro ao buscar dados:", error);
@@ -167,4 +181,12 @@ cityInput.addEventListener("keypress", (e) => {
 locationBtn.addEventListener("click", getUserLocation);
 
 // Inicialização
-fetchWeatherData("São Paulo"); // Cidade padrão
+// Inicialização - tenta obter a localização do usuário
+document.addEventListener('DOMContentLoaded', () => {
+    // Mostra mensagem de carregamento
+    cityName.textContent = "Obtendo localização...";
+    temperature.textContent = "--°C";
+    
+    // Tenta obter a localização
+    getUserLocation();
+});
